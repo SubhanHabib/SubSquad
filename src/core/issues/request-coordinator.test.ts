@@ -1,9 +1,9 @@
 import { describe, expect, it } from 'vitest'
-import { GitHubRequestCoordinator } from './request-coordinator'
+import { IssueRequestCoordinator } from './request-coordinator'
 
-describe('GitHubRequestCoordinator', () => {
+describe('IssueRequestCoordinator', () => {
   it('allows at most four reads for one identity across repositories', async () => {
-    const coordinator = new GitHubRequestCoordinator()
+    const coordinator = new IssueRequestCoordinator()
     let active = 0
     let maximum = 0
     const releases: Array<() => void> = []
@@ -24,7 +24,7 @@ describe('GitHubRequestCoordinator', () => {
   })
 
   it('applies a rate limit from one repository to every repository for the identity', () => {
-    const coordinator = new GitHubRequestCoordinator({ now: () => 1_000 })
+    const coordinator = new IssueRequestCoordinator({ now: () => 1_000 })
     coordinator.noteRateLimit('user-1', { kind: 'secondary', retryAt: 5_000 })
     expect(coordinator.canStart('user-1', 4_999)).toBe(false)
     expect(coordinator.canStart('user-1', 5_000)).toBe(true)
@@ -32,7 +32,7 @@ describe('GitHubRequestCoordinator', () => {
   })
 
   it('learns an identity-wide backoff directly from a failed GitHub operation', async () => {
-    const coordinator = new GitHubRequestCoordinator({ now: () => 1_000 })
+    const coordinator = new IssueRequestCoordinator({ now: () => 1_000 })
     await expect(coordinator.runRead('user-1', async () => {
       throw Object.assign(new Error('rate-limited'), { code: 'rate-limited', retryAt: 5_000 })
     })).rejects.toMatchObject({ code: 'rate-limited' })
@@ -42,7 +42,7 @@ describe('GitHubRequestCoordinator', () => {
   it('rechecks an identity deadline that is extended while a request is sleeping', async () => {
     let now = 1_000
     const sleeps: number[] = []
-    const coordinator = new GitHubRequestCoordinator({
+    const coordinator = new IssueRequestCoordinator({
       now: () => now,
       sleep: async (milliseconds) => {
         sleeps.push(milliseconds)
@@ -63,7 +63,7 @@ describe('GitHubRequestCoordinator', () => {
   it('serialises mutations and spaces their start times by one second', async () => {
     let now = 0
     const sleeps: number[] = []
-    const coordinator = new GitHubRequestCoordinator({
+    const coordinator = new IssueRequestCoordinator({
       now: () => now,
       sleep: async (ms) => { sleeps.push(ms); now += ms }
     })
@@ -78,7 +78,7 @@ describe('GitHubRequestCoordinator', () => {
   })
 
   it('cancels queued work when an identity changes', async () => {
-    const coordinator = new GitHubRequestCoordinator()
+    const coordinator = new IssueRequestCoordinator()
     let release: () => void = () => undefined
     const first = coordinator.runMutation('user-1', () => new Promise<void>((resolve) => { release = resolve }))
     const queued = coordinator.runMutation('user-1', async () => 'must-not-run')
@@ -90,7 +90,7 @@ describe('GitHubRequestCoordinator', () => {
   })
 
   it('cancels queued work for every known identity at an authentication boundary', async () => {
-    const coordinator = new GitHubRequestCoordinator()
+    const coordinator = new IssueRequestCoordinator()
     let releaseA: () => void = () => undefined
     let releaseB: () => void = () => undefined
     const activeA = coordinator.runMutation('user-a', () =>

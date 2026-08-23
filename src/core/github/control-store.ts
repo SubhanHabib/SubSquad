@@ -1,11 +1,9 @@
-import { promises as fs } from 'node:fs'
-import path from 'node:path'
 import type {
   GitHubAuthProvider,
   GitHubControlState,
   GitHubProjectApproval
 } from '../../shared/github-issues'
-import { renameAtomic, tempNameFor } from '../fs-atomic'
+import { RevisionedJsonStore, RevisionedStoreError } from '../issues/revisioned-store'
 import { parseGitHubRepository } from './config'
 
 const FILE_NAME = 'github-issues-control.json'
@@ -16,11 +14,10 @@ const EMPTY_STATE: GitHubControlState = {
   approvals: []
 }
 
-export class GitHubControlError extends Error {
-  constructor(readonly code: 'revision-conflict' | 'invalid-control-input') {
-    super(code)
-  }
-}
+/** Historical name for the shared store's error — the code union is identical, and every existing
+ *  `instanceof GitHubControlError` call site keeps working because this IS that class. */
+export const GitHubControlError = RevisionedStoreError
+export type GitHubControlError = RevisionedStoreError
 
 type ApprovalInput = {
   expectedRevision: number
@@ -52,22 +49,12 @@ function validState(value: unknown): value is GitHubControlState {
     Array.isArray(state.approvals) && state.approvals.every(validApproval)
 }
 
-export class GitHubControlStore {
-  private writeQueue: Promise<void> = Promise.resolve()
-
-  constructor(private readonly userDataDir: string) {}
-
-  private get filePath(): string {
-    return path.join(this.userDataDir, FILE_NAME)
-  }
-
-  async load(): Promise<GitHubControlState> {
-    try {
-      const parsed: unknown = JSON.parse(await fs.readFile(this.filePath, 'utf-8'))
-      return validState(parsed) ? structuredClone(parsed) : structuredClone(EMPTY_STATE)
-    } catch {
-      return structuredClone(EMPTY_STATE)
-    }
+/** Which projects on THIS machine may reach GitHub, and with which auth provider. The revision
+ *  discipline and the atomic write live in `RevisionedJsonStore`; the verbs and the on-disk shape
+ *  stay here, since the file already exists on users' disks with these exact field names. */
+export class GitHubControlStore extends RevisionedJsonStore<GitHubControlState> {
+  constructor(userDataDir: string) {
+    super(userDataDir, FILE_NAME, EMPTY_STATE, validState)
   }
 
   approve(input: ApprovalInput): Promise<GitHubControlState> {
@@ -75,7 +62,7 @@ export class GitHubControlStore {
       if (!validString(input.localApprovalId, 128) ||
           !validString(input.projectId, 256) ||
           parseGitHubRepository(input.repository) !== input.repository) {
-        throw new GitHubControlError('invalid-control-input')
+        throw new RevisionedStoreError('invalid-control-input')
       }
       const approval: GitHubProjectApproval = {
         localApprovalId: input.localApprovalId,
@@ -97,7 +84,7 @@ export class GitHubControlStore {
   revoke(input: { expectedRevision: number; localApprovalId: string }): Promise<GitHubControlState> {
     return this.mutate(input.expectedRevision, (state) => {
       if (!validString(input.localApprovalId, 128)) {
-        throw new GitHubControlError('invalid-control-input')
+        throw new RevisionedStoreError('invalid-control-input')
       }
       return {
         ...state,
@@ -112,7 +99,7 @@ export class GitHubControlStore {
   }): Promise<GitHubControlState> {
     return this.mutate(input.expectedRevision, (state) => {
       if (input.provider !== 'auto' && input.provider !== 'gh' && input.provider !== 'token') {
-        throw new GitHubControlError('invalid-control-input')
+        throw new RevisionedStoreError('invalid-control-input')
       }
       return { ...state, authProvider: input.provider }
     })
@@ -126,50 +113,5 @@ export class GitHubControlStore {
       approval.localApprovalId === input.localApprovalId &&
       approval.projectId === input.projectId &&
       approval.repository === input.repository)
-  }
-
-  private mutate(
-    expectedRevision: number,
-    change: (state: GitHubControlState) => GitHubControlState
-  ): Promise<GitHubControlState> {
-    let resolveResult: (state: GitHubControlState) => void
-    let rejectResult: (error: unknown) => void
-    const result = new Promise<GitHubControlState>((resolve, reject) => {
-      resolveResult = resolve
-      rejectResult = reject
-    })
-    this.writeQueue = this.writeQueue.then(async () => {
-      try {
-        const current = await this.load()
-        if (!Number.isSafeInteger(expectedRevision) || current.revision !== expectedRevision) {
-          throw new GitHubControlError('revision-conflict')
-        }
-        const next = { ...change(current), revision: current.revision + 1 }
-        await this.write(next)
-        resolveResult(structuredClone(next))
-      } catch (error) {
-        rejectResult(error)
-      }
-    })
-    return result
-  }
-
-  private async write(state: GitHubControlState): Promise<void> {
-    await fs.mkdir(this.userDataDir, { recursive: true })
-    // Unique temp + retrying rename (core/fs-atomic.ts). mutate()'s writeQueue serializes writes
-    // WITHIN this instance, but a second instance on the same data dir (Server Edition --data-dir)
-    // shares nothing with it — the fixed `<file>.tmp` name this used to carry let two such writers
-    // publish each other's half-written bytes. The unique name never self-heals, so a failed write
-    // removes its own temp before rethrowing.
-    const temporary = tempNameFor(this.filePath)
-    try {
-      await fs.writeFile(temporary, JSON.stringify(state), { encoding: 'utf-8', mode: 0o600 })
-      await fs.chmod(temporary, 0o600)
-      await renameAtomic(temporary, this.filePath)
-    } catch (error) {
-      await fs.rm(temporary, { force: true }).catch(() => {})
-      throw error
-    }
-    await fs.chmod(this.filePath, 0o600)
   }
 }
