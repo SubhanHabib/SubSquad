@@ -274,6 +274,20 @@ disable it with its reason (`NEW_FILE_NO_CWD_HINT`,
 nothing, and a message that names the wrong cause ("not a git repository" for a project that has no
 folder to be one) sends the user hunting a problem that does not exist.
 
+**A second provider goes beside the first, and it declares itself in the registry.** The Kanban
+board hosts GitHub issues, GitHub pull requests and Linear issues (`docs/linear-issues-kanban.md`).
+A new source is a `KANBAN_SOURCES` entry plus its own card component — never a reshaping of the
+board. This fork learned that the expensive way: it landed a competing normalisation (one
+`IssueCardView` for every provider) days before upstream's registry, and dropped it, because a
+second card shape layered over the registry pays a merge cost on every sync forever.
+Anything genuinely provider-neutral belongs in `src/core/issues/` where one definition serves both;
+anything provider-shaped — the service, the client, the on-disk field names — stays in
+`src/core/<provider>/`. The rule behind that split is upstream mergeability: `src/core/github/*` is
+upstream's code, and generalising it in place would put this fork's largest diff through the files
+it most needs to keep taking patches for. And do not assume the second provider behaves like the
+first — Linear's completion move is deliberately silent where GitHub's confirms, because the reason
+GitHub confirms (it emails every watcher) simply is not true there.
+
 **Agent features attach to base harness capabilities, not frontend allowlists.** A custom agent can
 inherit a builtin harness, so add the capability and its one shared leaf (`src/shared/agents`) and
 let every UI ask the helper. Repeating Claude/Codex/etc. cases in menus breaks that inheritance and

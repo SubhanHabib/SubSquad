@@ -93,6 +93,11 @@ import { makeProjectSpawnOverrides } from '../core/project-spawn-overrides'
 import { makeLocalSetupRunner } from '../core/project-setup-runner-local'
 import { makeSshSetupRunner } from './remote-ssh/ssh-setup-runner'
 import { registerGitHubIntegration } from '../core/github/integration'
+import { registerLinearIntegration } from '../core/linear/integration'
+import {
+  ElectronLinearSecretStore,
+  registerElectronLinearControl
+} from './linear-control'
 import { runGitHubCliCommand } from '../core/github/credentials'
 import {
   ElectronGitHubSecretStore,
@@ -427,12 +432,14 @@ const speechService = new SpeechService({ models: whisperModels, isPremium })
 // Wired once here — do not double-wire (4b Task 4). A second wirePeerRegistry() call would silently
 // overwrite these deps (last write wins), so keep this the sole call site in src/main.
 let dropGitHubRelayClient: ((id: number) => void) | undefined
+let dropLinearRelayClient: ((id: number) => void) | undefined
 wirePeerRegistry({
   setFlow: (id, sid, resume, owner) => ptyManager.setFlow(id, sid, resume, owner),
   captureForResync: (sid) => ptyManager.captureForResync(sid),
   onPeerGone: (id) => {
     ptyManager.dropClient(id)
     dropGitHubRelayClient?.(id)
+    dropLinearRelayClient?.(id)
   }
 })
 
@@ -1598,6 +1605,23 @@ app.whenReady().then(async () => {
     ipcMain,
     () => getMainWindow()?.webContents.id,
     github.controller
+  )
+
+  // Linear, beside GitHub rather than instead of it: a board can host both, and the two providers
+  // share nothing but the renderer's `IssueCardView`. `workspaceStore.githubProject` is
+  // provider-neutral despite its name (it returns `{ project, localApprovalId }`); renaming it
+  // would be a pointless diff against upstream.
+  const linear = registerLinearIntegration({
+    platform: corePlatform,
+    userDataDir: app.getPath('userData'),
+    project: (projectId) => workspaceStore.githubProject(projectId),
+    secret: new ElectronLinearSecretStore(app.getPath('userData'), safeStorage)
+  })
+  dropLinearRelayClient = (id) => linear.service.dropClient(id)
+  registerElectronLinearControl(
+    ipcMain,
+    () => getMainWindow()?.webContents.id,
+    linear.controller
   )
 
   // SSH-project Explorer/Editor fs: the remote analog of the fs:* handlers above, scoped to a

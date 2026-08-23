@@ -106,6 +106,13 @@ const PATHS: Record<StaticSettingsSectionId, React.JSX.Element> = {
       <path d="M8 2.2a5.8 5.8 0 0 0-1.8 11.3c.3.1.4-.1.4-.3v-1.1c-1.7.4-2.1-.7-2.1-.7-.3-.8-.8-1-1-1.1-.7-.4.1-.4.1-.4.8.1 1.2.8 1.2.8.7 1.2 1.8.8 2.2.6.1-.5.3-.8.5-1-1.4-.2-2.8-.7-2.8-3a2.4 2.4 0 0 1 .6-1.6 2.2 2.2 0 0 1 .1-1.6s.5-.2 1.7.6a5.7 5.7 0 0 1 3.1 0c1.2-.8 1.7-.6 1.7-.6a2.2 2.2 0 0 1 .1 1.6 2.4 2.4 0 0 1 .6 1.6c0 2.3-1.4 2.8-2.8 3 .2.2.4.6.4 1.2v1.7c0 .2.1.4.4.3A5.8 5.8 0 0 0 8 2.2Z" />
     </>
   ),
+  // Linear's mark is three ascending strokes; drawn rather than imported so the settings sidebar
+  // stays a single self-contained icon set.
+  'linear-issues': (
+    <>
+      <path d="M2.6 9.6 6.4 13.4M2.3 6.7 9.3 13.7M2.6 3.9 12.1 13.4M4.8 2.2l9 9" />
+    </>
+  ),
   license: (
     <>
       <circle cx="5.6" cy="5.6" r="2.6" />

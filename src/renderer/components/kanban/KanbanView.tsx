@@ -16,22 +16,31 @@ import { KanbanColumn, type KanbanLane } from './KanbanColumn'
 import { SessionCard } from './SessionCard'
 import { GitHubIssueCard } from './GitHubIssueCard'
 import { GitHubPullCard } from './GitHubPullCard'
+import { LinearIssueCard } from './LinearIssueCard'
 import { kanbanSource, sourceVisible } from '../../lib/kanbanSources'
 import type { ModalSpawn } from './ModalTerminal'
 import { ContextMenu, type MenuItem } from '../ContextMenu'
 import { IconAgent, IconExternal, IconNote, IconSwitch, IconTerminal, IconTrash, IconWeb } from '../icons'
 import type { GitHubIssueCardView } from '@shared/github-issues'
+import type { LinearIssueCardView } from '@shared/linear-issues'
 import { useGitHubIssues } from '../../state/githubIssues'
+import { useLinearIssues } from '../../state/linearIssues'
 import { useAgentStatus } from '../../state/agentStatus'
 import { useSession } from '../../session/session'
 import { KanbanSourceFilter, type KanbanSource } from './KanbanSourceFilter'
 import { GitHubIssueSummaryModal } from './GitHubIssueSummaryModal'
+import { LinearIssueSummaryModal } from './LinearIssueSummaryModal'
 import { ConfirmDialog } from '../ConfirmDialog'
 import {
   githubMoveConfirmation,
   githubMoveIntent,
   type GitHubMoveConfirmation
 } from '../../lib/githubIssueMove'
+import {
+  linearMoveConfirmation,
+  linearMoveIntent,
+  type LinearMoveConfirmation
+} from '../../lib/linearIssueMove'
 
 /** One session node shown as a board card — derived LIVE from the canvas nodes; the board
  *  itself stores only column assignments. */
@@ -103,6 +112,7 @@ type Drag =
   | { kind: 'column'; id: string }
   | { kind: 'card'; sourceId: 'sessions'; id: string }
   | { kind: 'card'; sourceId: 'github'; issue: GitHubIssueCardView }
+  | { kind: 'card'; sourceId: 'linear'; issue: LinearIssueCardView }
   | null
 
 type CardDrag = Extract<Drag, { kind: 'card' }>
@@ -110,7 +120,9 @@ type CardDrag = Extract<Drag, { kind: 'card' }>
 /** A dragged card whose column the PROVIDER owns: dropping it is the provider's write (which may
  *  confirm or refuse), never a board assignment. The branch is the registry's `placement`, not
  *  the source's name — the union only supplies the narrowing. */
-const isProviderDrag = (drag: CardDrag): drag is Extract<CardDrag, { sourceId: 'github' }> =>
+const isProviderDrag = (
+  drag: CardDrag
+): drag is Extract<CardDrag, { sourceId: 'github' | 'linear' }> =>
   kanbanSource(drag.sourceId).placement === 'provider'
 
 /** Shared empty results — stable identities so memoized cards/columns see "no change". */
@@ -143,7 +155,15 @@ export const KanbanView = memo(function KanbanView({
     { item: GitHubIssueCardView; kind: 'issue' | 'pull' } | null
   >(null)
   const [githubRetry, setGitHubRetry] = useState(0)
+  const [linearRetry, setLinearRetry] = useState(0)
+  // Why the last Linear move was refused (Ungrouped, or a column whose state no longer resolves).
+  // A refused drag must SAY so: a card snapping back with no message reads as a broken board.
+  const [linearRefusal, setLinearRefusal] = useState<string | null>(null)
+  const [modalLinearIssue, setModalLinearIssue] = useState<LinearIssueCardView | null>(null)
   // A move that would close or reopen the issue on GitHub waits here for an explicit confirmation.
+  const [pendingLinearMove, setPendingLinearMove] = useState<
+    { issue: LinearIssueCardView; columnId: string | null; confirmation: LinearMoveConfirmation } | null
+  >(null)
   const [pendingGitHubMove, setPendingGitHubMove] = useState<
     { issue: GitHubIssueCardView; columnId: string | null; confirmation: GitHubMoveConfirmation } | null
   >(null)
@@ -159,6 +179,18 @@ export const KanbanView = memo(function KanbanView({
   const connectGitHub = useGitHubIssues((state) => state.connect)
   const moveGitHubState = useGitHubIssues((state) => state.move)
   const loadMoreGitHub = useGitHubIssues((state) => state.loadMore)
+  const linear = useLinearIssues((state) => state.projects[projectId])
+  const linearReadOnly = Object.values(linear?.pages ?? {}).some((page) => page.readOnly)
+  const connectLinear = useLinearIssues((state) => state.connect)
+  const moveLinearState = useLinearIssues((state) => state.move)
+  const loadMoreLinear = useLinearIssues((state) => state.loadMore)
+  // Which workflow-state TYPE each mapped column resolves to, reported by the host with the page.
+  // The move rules are typed on it (completing is silent, cancelling and reopening confirm), so
+  // the board never infers a state's meaning from a column's title.
+  const linearColumnStateTypes = useMemo(
+    () => Object.values(linear?.pages ?? {}).find((page) => page.columnStateTypes)?.columnStateTypes,
+    [linear?.pages]
+  )
   // Drop ids no longer in the palette so a deleted label can't keep the board filtered to nothing.
   const paletteLabels = useMemo(() => boardLabels(board), [board])
   const githubLabels = useMemo(() => {
@@ -176,15 +208,30 @@ export const KanbanView = memo(function KanbanView({
     }
     return [...labels.values()].sort((a, b) => a.name.localeCompare(b.name))
   }, [github?.pages, github?.pullPages])
+  const linearLabels = useMemo(() => {
+    const labels = new Map<string, { name: string; color: string }>()
+    for (const page of Object.values(linear?.pages ?? {})) {
+      for (const issue of page.items) {
+        for (const label of issue.labels) {
+          const key = label.name.normalize('NFKC').toLocaleLowerCase('en-US')
+          if (!labels.has(key)) labels.set(key, { name: label.name, color: label.color })
+        }
+      }
+    }
+    return [...labels.values()].sort((a, b) => a.name.localeCompare(b.name))
+  }, [linear?.pages])
   const localFilterKeys = useMemo(() => new Set(paletteLabels.map((label) => `local:${label.id}`)), [paletteLabels])
   const activeFilter = useMemo(
-    () => labelFilter.filter((id) => localFilterKeys.has(id) || id.startsWith('github:')),
+    () => labelFilter.filter((id) => localFilterKeys.has(id) ||
+      id.startsWith('github:') || id.startsWith('linear:')),
     [labelFilter, localFilterKeys]
   )
   const activeLocalFilter = useMemo(() => activeFilter
     .filter((key) => key.startsWith('local:')).map((key) => key.slice(6)), [activeFilter])
   const activeGitHubFilter = useMemo(() => activeFilter
     .filter((key) => key.startsWith('github:')), [activeFilter])
+  const activeLinearFilter = useMemo(() => activeFilter
+    .filter((key) => key.startsWith('linear:')), [activeFilter])
   const toggleFilter = (id: string): void =>
     setLabelFilter((f) => (f.includes(id) ? f.filter((x) => x !== id) : [...f, id]))
   // Report the open node to the canvas (dictation shortcut targeting) and mark its completion read.
@@ -226,10 +273,40 @@ export const KanbanView = memo(function KanbanView({
     // The serialised config is the epoch visible to the renderer. Reconnect when mappings change.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [api, projectId, githubConfigKey, columnIdsKey, githubFilterKey, connectGitHub, githubRetry])
+  const linearConfigKey = JSON.stringify(board.linear ?? null)
+  const linearFilterKey = activeLinearFilter.join('\0')
+  useEffect(() => {
+    if (!board.linear || !projectId) return
+    let disposed = false
+    let disconnect: (() => void) | undefined
+    void connectLinear(
+      api.linearIssues,
+      projectId,
+      board.columns.map((column) => column.id),
+      activeLinearFilter
+    )
+      .then((teardown) => {
+        if (disposed) teardown()
+        else disconnect = teardown
+      })
+    return () => {
+      disposed = true
+      disconnect?.()
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [api, projectId, linearConfigKey, columnIdsKey, linearFilterKey, connectLinear, linearRetry])
   useEffect(() => {
     setSource('all')
     setModalIssue(null)
+    setModalLinearIssue(null)
   }, [projectId])
+  useEffect(() => {
+    if (!modalLinearIssue || !linear) return
+    const latest = Object.values(linear.pages)
+      .flatMap((page) => page.items)
+      .find((item) => item.id === modalLinearIssue.id)
+    if (latest && latest.updatedAt !== modalLinearIssue.updatedAt) setModalLinearIssue(latest)
+  }, [linear, modalLinearIssue])
   useEffect(() => {
     if (!modalIssue || !github) return
     const source = modalIssue.kind === 'pull' ? github.pullPages : github.pages
@@ -318,6 +395,47 @@ export const KanbanView = memo(function KanbanView({
     [api.githubIssues, board.github?.completionColumnId, githubReadOnly, moveGitHubState, projectId]
   )
 
+  // The ONE path every Linear card move takes. Its rules are deliberately the inverse of GitHub's:
+  // completing is SILENT (dragging to Done is the board's happy path, it is reversible, and it
+  // notifies nobody the way closing a GitHub issue does), while cancelling and reopening confirm.
+  // A dialog on the common gesture only teaches people to click through the one that matters.
+  const requestLinearMove = useCallback(
+    (issue: LinearIssueCardView, columnId: string | null) => {
+      if (linearReadOnly) return
+      const movable = {
+        identifier: issue.identifier,
+        title: issue.title,
+        done: issue.state.type === 'completed' || issue.state.type === 'canceled',
+        columnId: issue.columnId
+      }
+      const intent = linearMoveIntent(movable, columnId, linearColumnStateTypes)
+      if (intent.kind === 'noop') return
+      // Ungrouped is not a Linear state and there is no "remove the state" operation, so the card
+      // says why instead of snapping back unexplained.
+      if (intent.kind === 'refused') {
+        setLinearRefusal(intent.reason ?? null)
+        return
+      }
+      const confirmation = linearMoveConfirmation(movable, columnId, linearColumnStateTypes)
+      if (confirmation) {
+        setPendingLinearMove({ issue, columnId, confirmation })
+        return
+      }
+      void moveLinearState(api.linearIssues, projectId, issue.id, columnId, issue.updatedAt)
+    },
+    [api.linearIssues, linearColumnStateTypes, linearReadOnly, moveLinearState, projectId]
+  )
+
+  /** Routes a provider-owned drop to that provider's own move path. The drop handlers stay
+   *  source-agnostic: they know only that the registry calls this placement `provider`. */
+  const requestProviderMove = useCallback(
+    (drag: Extract<CardDrag, { sourceId: 'github' | 'linear' }>, columnId: string | null) => {
+      if (drag.sourceId === 'linear') requestLinearMove(drag.issue, columnId)
+      else requestGitHubMove(drag.issue, columnId)
+    },
+    [requestGitHubMove, requestLinearMove]
+  )
+
   // columnId null = the virtual Ungrouped column.
   const dropOnColumn = useCallback(
     (columnId: string | null) => {
@@ -326,10 +444,10 @@ export const KanbanView = memo(function KanbanView({
       if (drag.kind === 'column') {
         if (columnId !== null) commit(moveColumn(board, drag.id, columnId))
         // a column dropped on Ungrouped is a no-op — Ungrouped is always first
-      } else if (isProviderDrag(drag)) requestGitHubMove(drag.issue, columnId)
+      } else if (isProviderDrag(drag)) requestProviderMove(drag, columnId)
       else commit(assignNode(board, drag.id, columnId, null))
     },
-    [board, commit, requestGitHubMove]
+    [board, commit, requestProviderMove]
   )
 
   const dropAtCard = useCallback(
@@ -341,7 +459,7 @@ export const KanbanView = memo(function KanbanView({
         return
       }
       if (isProviderDrag(drag)) {
-        requestGitHubMove(drag.issue, columnId)
+        requestProviderMove(drag, columnId)
         return
       }
       // "after this card" = "before the NEXT card in the column" (null = end of column).
@@ -353,7 +471,7 @@ export const KanbanView = memo(function KanbanView({
       }
       commit(assignNode(board, drag.id, columnId, beforeId))
     },
-    [board, commit, requestGitHubMove, sessionIds]
+    [board, commit, requestProviderMove, sessionIds]
   )
 
   // Per-column card lists in one pass, so a board render doesn't re-derive (and re-allocate)
@@ -376,6 +494,10 @@ export const KanbanView = memo(function KanbanView({
   // across renders (the column binds its own id; cards bind theirs).
   const handleCardDragStart = useCallback((id: string) => {
     dragRef.current = { kind: 'card', sourceId: 'sessions', id }
+  }, [])
+  const handleLinearDragStart = useCallback((issue: LinearIssueCardView) => {
+    setLinearRefusal(null)
+    dragRef.current = { kind: 'card', sourceId: 'linear', issue }
   }, [])
   const handleGitHubDragStart = useCallback((issue: GitHubIssueCardView) => {
     dragRef.current = { kind: 'card', sourceId: 'github', issue }
@@ -407,6 +529,8 @@ export const KanbanView = memo(function KanbanView({
     github?.pages[columnId ?? 'ungrouped'], [github])
   const githubPullPage = useCallback((columnId: string | null) =>
     github?.pullPages[columnId ?? 'ungrouped'], [github])
+  const linearPage = useCallback((columnId: string | null) =>
+    linear?.pages[columnId ?? 'ungrouped'], [linear])
   const openIssueModal = useCallback(
     (item: GitHubIssueCardView) => setModalIssue({ item, kind: 'issue' }), [])
   const openPullModal = useCallback(
@@ -508,6 +632,37 @@ export const KanbanView = memo(function KanbanView({
           : undefined
       })
     }
+    if (sourceVisible(source, 'linear') && kanbanSource('linear').configured(board)) {
+      const page = linearPage(columnId)
+      lanes.push({
+        sourceId: 'linear',
+        count: (columnId === null ? page?.counts.ungrouped : page?.counts[columnId]) ?? 0,
+        cards: (page?.items ?? []).map((issue) => (
+          <LinearIssueCard
+            key={`linear:${issue.id}`}
+            issue={issue}
+            columns={board.columns}
+            moving={!!linear?.moving[issue.id]}
+            readOnly={linearReadOnly}
+            status={linear?.issueStatus[issue.id]}
+            onOpen={setModalLinearIssue}
+            onMove={requestLinearMove}
+            onDragStart={handleLinearDragStart}
+            onDragEnd={handleDragEnd}
+          />
+        )),
+        footer: page?.nextCursor
+          ? (
+            <button
+              className="kanban-github-more"
+              onClick={() => void loadMoreLinear(api.linearIssues, projectId, columnId)}
+            >
+              Show more issues
+            </button>
+          )
+          : undefined
+      })
+    }
     return lanes
   }
 
@@ -543,7 +698,9 @@ export const KanbanView = memo(function KanbanView({
       <div className="kanban-header">
         <span className="kanban-header__dot" style={{ background: projectColor }} />
         <span className="kanban-header__name">{projectName}</span>
-        {board.github && <KanbanSourceFilter value={source} onChange={setSource} />}
+        {(board.github || board.linear) && (
+          <KanbanSourceFilter value={source} board={board} onChange={setSource} />
+        )}
         {board.github && github?.loading && <span className="kanban-github-status">Loading GitHub issues…</span>}
         {board.github && github?.error && (
           <button
@@ -563,7 +720,27 @@ export const KanbanView = memo(function KanbanView({
             Showing the most recently updated pull requests only.
           </span>
         )}
-        {(paletteLabels.length > 0 || githubLabels.length > 0 || activeFilter.length > 0) && (
+        {board.linear && linear?.loading && (
+          <span className="kanban-github-status">Loading Linear issues…</span>
+        )}
+        {board.linear && linear?.error && (
+          <button
+            className="kanban-github-status kanban-github-status--error kanban-github-retry"
+            onClick={() => setLinearRetry((value) => value + 1)}
+          >
+            Linear issues unavailable · Retry
+          </button>
+        )}
+        {board.linear && linearReadOnly && (
+          <span className="kanban-github-status kanban-github-status--error">
+            Linear issues are read only until the first full refresh succeeds.
+          </span>
+        )}
+        {linearRefusal && (
+          <span className="kanban-github-status kanban-github-status--error">{linearRefusal}</span>
+        )}
+        {(paletteLabels.length > 0 || githubLabels.length > 0 || linearLabels.length > 0 ||
+          activeFilter.length > 0) && (
           <div className="kanban-header__filter">
             <button
               className={`kanban-filter-btn${activeFilter.length ? ' kanban-filter-btn--on' : ''}`}
@@ -599,6 +776,22 @@ export const KanbanView = memo(function KanbanView({
                         <span className="github-issue-label" style={{
                           borderColor: `#${label.color}`,
                           color: `#${label.color}`
+                        }}>{label.name}</span>
+                        {on && <span className="label-picker__rowcheck">✓</span>}
+                      </button>
+                    )
+                  })}
+                  {linearLabels.length > 0 && <div className="kanban-filter-group">Linear</div>}
+                  {linearLabels.map((label) => {
+                    const key = `linear:${label.name.normalize('NFKC').toLocaleLowerCase('en-US')}`
+                    const on = activeFilter.includes(key)
+                    return (
+                      <button key={key} className="kanban-filter-row" onClick={() => toggleFilter(key)}>
+                        {/* Linear label colours already arrive as CSS colours, unlike GitHub's
+                            bare six hex digits — do not prefix a '#' here. */}
+                        <span className="linear-issue-label" style={{
+                          borderColor: label.color,
+                          color: label.color
                         }}>{label.name}</span>
                         {on && <span className="label-picker__rowcheck">✓</span>}
                       </button>
@@ -684,6 +877,30 @@ export const KanbanView = memo(function KanbanView({
           status={github?.issueStatus[modalIssue.item.number]}
           onMove={(columnId) => handleMoveGitHub(modalIssue.item, columnId)}
           onClose={() => setModalIssue(null)}
+        />
+      )}
+      {modalLinearIssue && (
+        <LinearIssueSummaryModal
+          issue={modalLinearIssue}
+          columns={board.columns}
+          moving={!!linear?.moving[modalLinearIssue.id]}
+          readOnly={linearReadOnly}
+          status={linear?.issueStatus[modalLinearIssue.id]}
+          onMove={(columnId) => requestLinearMove(modalLinearIssue, columnId)}
+          onClose={() => setModalLinearIssue(null)}
+        />
+      )}
+      {pendingLinearMove && (
+        <ConfirmDialog
+          message={pendingLinearMove.confirmation.message}
+          confirmLabel={pendingLinearMove.confirmation.confirmLabel}
+          danger={pendingLinearMove.confirmation.danger}
+          onCancel={() => setPendingLinearMove(null)}
+          onConfirm={() => {
+            const { issue, columnId } = pendingLinearMove
+            setPendingLinearMove(null)
+            void moveLinearState(api.linearIssues, projectId, issue.id, columnId, issue.updatedAt)
+          }}
         />
       )}
       {pendingGitHubMove && (

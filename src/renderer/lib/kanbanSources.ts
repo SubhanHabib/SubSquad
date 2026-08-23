@@ -3,7 +3,7 @@ import type { ProjectKanban } from '@shared/types'
 /** Where a board card can come from. Sources are a membership list plus one concrete leaf each
  *  (the card component and the list path that feeds it) — the same discipline `AGENT_CONFIG`
  *  uses for agents, so no consumer spells a source id to decide how a card behaves. */
-export type KanbanSourceId = 'github' | 'pulls' | 'sessions'
+export type KanbanSourceId = 'github' | 'pulls' | 'linear' | 'sessions'
 
 /** The board's source filter: everything, or exactly one source. */
 export type KanbanSourceFilter = 'all' | KanbanSourceId
@@ -47,6 +47,16 @@ export const KANBAN_SOURCES: readonly KanbanSourceDef[] = [
     lane: 2,
     readOnly: true,
     configured: (board) => !!board.github
+  },
+  {
+    // A fourth source, declared rather than special-cased — see docs/linear-issues-kanban.md.
+    // `provider` placement because a Linear issue's column IS its workflow state: the board
+    // persists nothing for the card, and a move is `issueUpdate(stateId)`, not a board edit.
+    id: 'linear',
+    label: 'Linear',
+    placement: 'provider',
+    lane: 3,
+    configured: (board) => !!board.linear
   },
   {
     id: 'sessions',

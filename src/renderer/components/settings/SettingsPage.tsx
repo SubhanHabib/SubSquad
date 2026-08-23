@@ -32,6 +32,7 @@ import { UpdatesSection } from './sections/UpdatesSection'
 import { PrivacySection } from './sections/PrivacySection'
 import { DebugSection } from './sections/DebugSection'
 import { GitHubIssuesSection } from './sections/GitHubIssuesSection'
+import { LinearIssuesSection } from './sections/LinearIssuesSection'
 import { ModelGatewaySection } from './sections/ModelGatewaySection'
 
 const isMac = /Mac/i.test(navigator.platform || navigator.userAgent)
@@ -116,6 +117,7 @@ export function SettingsPage({
             <CommitSection isActive={active === 'commit'} />
             <TmuxSection isActive={active === 'tmux'} />
             <GitHubIssuesSection isActive={active === 'github-issues'} />
+            <LinearIssuesSection isActive={active === 'linear-issues'} />
             <LicenseSection isActive={active === 'license'} />
             <PresenceIdentitySection isActive={active === 'presence'} />
             <RemoteSection isActive={active === 'remote'} onClose={onClose} />

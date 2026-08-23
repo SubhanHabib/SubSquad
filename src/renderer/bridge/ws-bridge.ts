@@ -15,6 +15,7 @@ import {
 } from '../../shared/rpc'
 import { IPC } from '../../shared/ipc'
 import type { GitHubControlApi, GitHubIssuesApi } from '../../shared/github-issues'
+import type { LinearControlApi, LinearIssuesApi } from '../../shared/linear-issues'
 import {
   UNKNOWN_CLAUDE_CLI_CAPS,
   UNKNOWN_GROK_CLI_CAPS,
@@ -454,6 +455,55 @@ export function buildGitHubApi(
   }
 
   return { githubIssues, githubControl }
+}
+
+/**
+ * The Linear namespaces over an RpcClient — a REAL implementation, not a stub. CLAUDE.md's rule
+ * for this file is that a `noop`/`unsupported` member compiles fine while silently doing nothing,
+ * so every channel the preload invokes is mirrored here and the `satisfies`-shaped `Pick` makes
+ * the compiler the completeness gate. `unsubscribe` is the one `cast` (a `send` in the preload);
+ * `onChanged` is the one subscription.
+ */
+export function buildLinearApi(
+  client: RpcClient
+): Pick<NodeTerminalApi, 'linearIssues' | 'linearControl'> {
+  const linearIssues: LinearIssuesApi = {
+    subscribe: (projectId) =>
+      client.request(IPC.linearIssuesSubscribe, { projectId }) as ReturnType<
+        LinearIssuesApi['subscribe']
+      >,
+    unsubscribe: async (projectId) => {
+      client.cast(IPC.linearIssuesUnsubscribe, projectId)
+    },
+    query: (request) =>
+      client.request(IPC.linearIssuesQuery, request) as ReturnType<LinearIssuesApi['query']>,
+    refresh: (projectId, full) =>
+      client.request(IPC.linearIssuesRefresh, projectId, full) as Promise<void>,
+    moveIssue: (request) =>
+      client.request(IPC.linearIssuesMove, request) as ReturnType<LinearIssuesApi['moveIssue']>,
+    clearCache: (projectId) =>
+      client.request(IPC.linearIssuesClearCache, projectId) as Promise<void>,
+    onChanged: (projectId, listener) =>
+      client.subscribe(IPC.linearIssuesChanged(projectId), listener as Listener)
+  }
+
+  const linearControl: LinearControlApi = {
+    status: (projectId) =>
+      client.request(IPC.linearControlStatus, projectId) as ReturnType<LinearControlApi['status']>,
+    approve: (input) =>
+      client.request(IPC.linearControlApprove, input) as ReturnType<LinearControlApi['approve']>,
+    revoke: (input) =>
+      client.request(IPC.linearControlRevoke, input) as ReturnType<LinearControlApi['revoke']>,
+    saveKey: (key) =>
+      client.request(IPC.linearControlSaveKey, key) as ReturnType<LinearControlApi['saveKey']>,
+    clearKey: () =>
+      client.request(IPC.linearControlClearKey) as ReturnType<LinearControlApi['clearKey']>,
+    teams: () => client.request(IPC.linearControlTeams) as ReturnType<LinearControlApi['teams']>,
+    states: (teamKey) =>
+      client.request(IPC.linearControlStates, teamKey) as ReturnType<LinearControlApi['states']>
+  }
+
+  return { linearIssues, linearControl }
 }
 
 /**
@@ -1062,6 +1112,7 @@ export async function installWsBridge(): Promise<boolean> {
     ...buildTriggersApi(client),
     ...buildGitHubApi(client),
     ...buildClaudeAccountsApi(client),
+    ...buildLinearApi(client),
     codex: buildCodexApi(client),
     // `claude` is assembled from two builders: `cliCaps` from the relay-shared one, and the
     // transcript reader from the Server-Edition-only one (which also supplies `chat`).

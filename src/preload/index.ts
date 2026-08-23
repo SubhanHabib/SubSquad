@@ -233,6 +233,31 @@ const api: NodeTerminalApi = {
     saveToken: (token) => ipcRenderer.invoke(IPC.githubControlSaveToken, token),
     clearToken: () => ipcRenderer.invoke(IPC.githubControlClearToken)
   },
+  linearIssues: {
+    subscribe: (projectId) => ipcRenderer.invoke(IPC.linearIssuesSubscribe, { projectId }),
+    unsubscribe: async (projectId) => {
+      ipcRenderer.send(IPC.linearIssuesUnsubscribe, projectId)
+    },
+    query: (request) => ipcRenderer.invoke(IPC.linearIssuesQuery, request),
+    refresh: (projectId, full) => ipcRenderer.invoke(IPC.linearIssuesRefresh, projectId, full),
+    moveIssue: (request) => ipcRenderer.invoke(IPC.linearIssuesMove, request),
+    clearCache: (projectId) => ipcRenderer.invoke(IPC.linearIssuesClearCache, projectId),
+    onChanged: (projectId, listener) => {
+      const channel = IPC.linearIssuesChanged(projectId)
+      const handler = (_e: unknown, ids: string[]): void => listener(ids)
+      ipcRenderer.on(channel, handler)
+      return () => ipcRenderer.removeListener(channel, handler)
+    }
+  },
+  linearControl: {
+    status: (projectId) => ipcRenderer.invoke(IPC.linearControlStatus, projectId),
+    approve: (input) => ipcRenderer.invoke(IPC.linearControlApprove, input),
+    revoke: (input) => ipcRenderer.invoke(IPC.linearControlRevoke, input),
+    saveKey: (key) => ipcRenderer.invoke(IPC.linearControlSaveKey, key),
+    clearKey: () => ipcRenderer.invoke(IPC.linearControlClearKey),
+    teams: () => ipcRenderer.invoke(IPC.linearControlTeams),
+    states: (teamKey) => ipcRenderer.invoke(IPC.linearControlStates, teamKey)
+  },
   speech: {
     // IPC carries the raw Float32 samples as an ArrayBuffer (structured clone; decodePcmPayload's
     // ArrayBuffer branch reads it directly, no re-encoding). A Float32Array view doesn't always

@@ -8,6 +8,12 @@ testing habits). This file is what you reach for when you need to know *why* a r
 is, or you are changing a subsystem it describes. A change that other developers must know about
 belongs in BOTH (see Conventions).
 
+**This is the SubSquad fork of nodeterm. `docs/fork-decisions.md` is the running decision log** —
+what this fork decided, per branch, and why. Read it before undoing anything that looks redundant
+(a compat shim, an odd build flag, a field left deliberately unchanged) and before merging from
+upstream; its Watch list carries the live risks. Append your branch's decisions there in the same
+change that makes them.
+
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
 ## What this is
@@ -2652,7 +2658,7 @@ the Settings section and ShortcutsPanel start disagreeing about what a chord mea
   `agentStatus` store (click = back to canvas + `focusNodeById`); GITHUB cards are the repo's
   issues (`GitHubIssueCardView` via `state/githubIssues.ts`, opened through
   `GitHubIssueSummaryModal`, a column move that closes/reopens the issue confirms first). A
-  **source filter** (`KanbanSourceFilter`: All / Issues / Pull requests / Sessions) and a transient
+  **source filter** (`KanbanSourceFilter`: All / Issues / Pull requests / Linear / Sessions) and a transient
   per-board **label filter** narrow what shows.
   **PULL REQUEST cards are harvested from the issue poll, not fetched** (2026-09-01, read-only):
   `/repos/{repo}/issues` returns pull requests too — `client.listIssues` used to `continue` past
@@ -2684,7 +2690,7 @@ the Settings section and ShortcutsPanel start disagreeing about what a chord mea
   reorderable within a column; `provider` = the provider reports the column, the board persists
   nothing and a move is the provider's write), its in-column `lane` order and whether it is
   `configured` for a given board. Two orders live there deliberately: **declaration order is the
-  source filter's button order** (All · GitHub · Sessions), **`lane` is the in-column stacking order**
+  source filter's button order** (All · Issues · Pull requests · Linear · Sessions), **`lane` is the in-column stacking order**
   (sessions above issues) — they genuinely differ, and pinning both is what stops either being
   re-spelled elsewhere. `KanbanColumn` therefore takes ONE `lanes` prop (`{sourceId, cards, footer?,
   count}`) instead of a `cards` + eight `github*` props, places them via `byLane` and names no source;
@@ -2695,7 +2701,29 @@ the Settings section and ShortcutsPanel start disagreeing about what a chord mea
   semantics, not a source's concern) and `validKanban`, which stays the single shape gate on every
   load path — a registry entry must never grow its own parallel validation. **Labels** are a per-project palette (`ProjectKanban` labels,
   edited inline via the Notion-style `LabelPicker`: create/assign/rename/recolor/delete through the
-  pure `lib/kanban.ts` transforms) plus each GitHub issue's own labels, both filterable. The canvas stays MOUNTED under the opaque overlay (agent-status
+  pure `lib/kanban.ts` transforms) plus each tracker issue's own labels, all filterable.
+  **LINEAR is a fourth card source (fork, 2026-09-03).** It is declared in the SAME
+  `kanbanSources.ts` registry upstream added on 2026-08-30 — `placement: 'provider'`, its own lane,
+  `configured: (board) => !!board.linear` — and renders its own `LinearIssueCard`, exactly as the
+  `pulls` source renders `GitHubPullCard`. **The fork briefly had a competing abstraction** (one
+  normalised `IssueCardView` with per-provider adapters, 2026-08-23) and it was DROPPED when the two
+  met: upstream's registry arrived first, is the path upstream maintains, and a second card shape
+  layered over it would have paid a merge cost on every future sync. Prefer adding a registry entry
+  to reshaping the board.
+  The provider-neutral machinery that genuinely IS shared was lifted into `src/core/issues/`
+  (request coordinator, revisioned control store, snapshot cache) rather than copied, while each
+  provider keeps its own service/host/client and its own on-disk field names — GitHub's cache and
+  control files already exist on users' disks and must keep their exact format.
+  **LINEAR cards** come from `src/core/linear/*` + `state/linearIssues.ts` (Settings → Linear
+  Issues). Read **`docs/linear-issues-kanban.md`** before touching either provider; the traps that
+  cost the most are: Linear answers a FAILED GraphQL request with **HTTP 200 and a non-empty
+  `errors[]`** (an `ok` check reports a revoked key as a parser bug), its API key is sent **raw with
+  no `Bearer` prefix**, a column maps to a **workflow state stored by NAME** (a UUID is unreadable
+  in a committed diff, and ids do not survive a delete-and-recreate), **Ungrouped is refused** as a
+  drop target because every Linear issue always has a state, and **completing is silent while
+  cancelling and reopening confirm** — the inverse of GitHub's rule, because the completion move is
+  the board's happy path and a dialog there only trains people to click through the one that
+  matters. The canvas stays MOUNTED under the opaque overlay (agent-status
   listeners live in Canvas.tsx; `display:none` would 0×0-resize every terminal into a tmux
   SIGWINCH), and canvas-only shortcuts (undo, ⌘T/⌘⇧C, Delete) early-return via `isKanbanOpen`.
   Board data is `project.kanban` ({columns, assignments: [{nodeId, columnId}]}, order = array

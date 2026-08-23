@@ -40,7 +40,8 @@ import {
   buildCanvasApi,
   buildPresenceApi,
   buildClaudeApi,
-  buildGitHubApi
+  buildGitHubApi,
+  buildLinearApi
 } from './ws-bridge'
 import { buildStubApi } from './stubs'
 import { mountPickerRoot, openDirectoryPicker } from './dialog-picker'
@@ -71,6 +72,7 @@ export function buildRelayApi(connectionId: string, transport?: FrameTransport):
   const real = buildRealApi(client) // { pty, workspace, settings, userDataDir }
   const files = buildFilesApi(client) // { fs, git, files, context }
   const github = buildGitHubApi(client)
+  const linear = buildLinearApi(client)
   const stub = buildStubApi()
 
   const api: NodeTerminalApi = {
@@ -89,6 +91,11 @@ export function buildRelayApi(connectionId: string, transport?: FrameTransport):
     context: files.context,
     githubIssues: github.githubIssues,
     githubControl: local.githubControl,
+    // Same split as GitHub, for the same reason: reads and moves go to the trusted HOST (its
+    // credential, its approval, its cache), while control stays LOCAL so a guest can never save a
+    // key or approve a project on someone else's machine.
+    linearIssues: linear.linearIssues,
+    linearControl: local.linearControl,
     ...buildAgentApi(client), // onAgentStatus / onSubagentActivity — the host's agent hooks
     ...buildCanvasApi(client), // canvas sync against the host's reflector
     ...buildPresenceApi(client), // the host's presence hub

@@ -11,6 +11,7 @@ import type { GroupWorktree } from './worktree'
 import type { ClientId, DinoSnapshot, PeerDiff, PeerIdentity, PeerState } from './presence'
 import type { WhisperModelInfo } from './speech'
 import type { ProjectKanbanGitHub } from './github-issues'
+import type { ProjectKanbanLinear } from './linear-issues'
 import type { CodexAccount } from './codex-account'
 import type { ProjectIcon, ProjectIconPickResult } from './project-icon'
 import type {
@@ -568,6 +569,9 @@ export interface ProjectKanban {
   labels?: KanbanLabel[]
   /** Shared, non-secret GitHub issue label mapping. Local approval and credentials live elsewhere. */
   github?: ProjectKanbanGitHub
+  /** Shared, non-secret Linear column→workflow-state mapping. Same rule as `github`: the API key
+   *  and this machine's approval are local and never written to the project file. */
+  linear?: ProjectKanbanLinear
 }
 
 /** Who produced a board-log entry (a teammate on a shared board, or this user). */
@@ -3011,6 +3015,8 @@ export interface NodeTerminalApi {
   logs: LogApi
   githubIssues: import('./github-issues').GitHubIssuesApi
   githubControl: import('./github-issues').GitHubControlApi
+  linearIssues: import('./linear-issues').LinearIssuesApi
+  linearControl: import('./linear-issues').LinearControlApi
   usage: UsageApi
   sessionMemory: SessionMemoryApi
   triggers: TriggersApi

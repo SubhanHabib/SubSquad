@@ -19,6 +19,8 @@ import { registerAgentEnvIpc } from '../core/agent-env-ipc'
 import { PtyManager } from '../core/pty-manager'
 import { registerCoreHandlers } from './handlers'
 import { registerGitHubIntegration } from '../core/github/integration'
+import { registerLinearIntegration } from '../core/linear/integration'
+import { registerServerLinearControl, ServerLinearSecretStore } from './linear-control'
 import { runGitHubCliCommand } from '../core/github/credentials'
 import {
   registerServerGitHubControl,
@@ -334,6 +336,16 @@ export async function startServer(
     run: runGitHubCliCommand
   })
   registerServerGitHubControl(platform, github.controller)
+
+  // Linear, beside GitHub. No `run`/`detectRepository` dependencies: Linear has no CLI to shell
+  // out to and nothing in a checkout names a team, so configuration is the only source.
+  const linear = registerLinearIntegration({
+    platform,
+    userDataDir: config.dataDir,
+    project: (projectId) => workspaceStore.githubProject(projectId),
+    secret: new ServerLinearSecretStore(config.dataDir)
+  })
+  registerServerLinearControl(platform, linear.controller)
 
   // Board-log: same CorePlatform registrar as desktop, but the Server Edition has no SSH projects
   // (terminals are local), so the router only ever resolves a local folder cwd or unsupported —
@@ -726,6 +738,7 @@ export async function startServer(
     onClientGone: (uiId) => {
       ptyManager.dropClient(uiId)
       github.service.dropClient(uiId)
+      linear.service.dropClient(uiId)
     },
     trustProxy: config.trustProxy
   })

@@ -379,6 +379,25 @@ export const IPC = {
   githubControlSelectProvider: 'githubControl:select-provider',
   githubControlSaveToken: 'githubControl:save-token',
   githubControlClearToken: 'githubControl:clear-token',
+  // Linear. Mirrors the githubIssues/githubControl blocks above, with two deliberate absences:
+  // there is no `create-labels` (a column maps to a workflow state, and creating states from a
+  // board is out of scope) and no `select-provider` (a personal API key is the only credential
+  // Linear offers). `teams`/`states` are new — together they replace GitHub's git-origin
+  // detection, which has no Linear equivalent.
+  linearIssuesSubscribe: 'linearIssues:subscribe',
+  linearIssuesUnsubscribe: 'linearIssues:unsubscribe',
+  linearIssuesQuery: 'linearIssues:query',
+  linearIssuesRefresh: 'linearIssues:refresh',
+  linearIssuesMove: 'linearIssues:move',
+  linearIssuesClearCache: 'linearIssues:clear-cache',
+  linearIssuesChanged: (projectId: string) => `linearIssues:changed:${projectId}`,
+  linearControlStatus: 'linearControl:status',
+  linearControlApprove: 'linearControl:approve',
+  linearControlRevoke: 'linearControl:revoke',
+  linearControlSaveKey: 'linearControl:save-key',
+  linearControlClearKey: 'linearControl:clear-key',
+  linearControlTeams: 'linearControl:teams',
+  linearControlStates: 'linearControl:states',
   dialogSelectFolder: 'dialog:select-folder',
   dialogSelectFile: 'dialog:select-file',
   shellReveal: 'shell:reveal',

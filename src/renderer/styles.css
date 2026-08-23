@@ -8941,10 +8941,12 @@ button.group-node__setup:disabled {
 .kanban-card:hover {
   border-color: rgba(var(--tint-rgb), 0.2);
 }
-.kanban-card--github {
+.kanban-card--github,
+.kanban-card--linear {
   border-left: 2px solid rgba(125, 133, 144, 0.7);
 }
-.github-issue-state {
+.github-issue-state,
+.linear-issue-state {
   width: 9px;
   height: 9px;
   margin-top: 4px;
@@ -8952,10 +8954,12 @@ button.group-node__setup:disabled {
   border-radius: 50%;
   flex: 0 0 auto;
 }
-.github-issue-state--open {
+.github-issue-state--open,
+.linear-issue-state--open {
   color: #3fb950;
 }
-.github-issue-state--closed {
+.github-issue-state--closed,
+.linear-issue-state--done {
   color: #a371f7;
 }
 .kanban-card--pull {
@@ -9003,7 +9007,8 @@ button.group-node__setup:disabled {
 .github-pull-badge--closed {
   color: #f85149;
 }
-.github-issue-source {
+.github-issue-source,
+.linear-issue-source {
   flex: 0 0 auto;
   border: 1px solid rgba(var(--tint-rgb), 0.15);
   border-radius: 4px;
@@ -9013,18 +9018,21 @@ button.group-node__setup:disabled {
   letter-spacing: 0.04em;
   padding: 1px 4px;
 }
-.github-issue-card__number {
+.github-issue-card__number,
+.linear-issue-card__number {
   margin: 4px 0 0 17px;
   color: rgba(var(--tint-rgb), 0.42);
   font-size: 10px;
 }
-.github-issue-card__labels {
+.github-issue-card__labels,
+.linear-issue-card__labels {
   display: flex;
   flex-wrap: wrap;
   gap: 4px;
   margin-top: 7px;
 }
-.github-issue-label {
+.github-issue-label,
+.linear-issue-label {
   max-width: 100%;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -9035,7 +9043,8 @@ button.group-node__setup:disabled {
   font-size: 9px;
   line-height: 1.4;
 }
-.github-issue-card__footer {
+.github-issue-card__footer,
+.linear-issue-card__footer {
   display: flex;
   align-items: center;
   gap: 6px;
@@ -9046,23 +9055,27 @@ button.group-node__setup:disabled {
 .github-issue-conflict {
   color: var(--warn);
 }
-.github-issue-card__footer .kanban-card__avatars {
+.github-issue-card__footer .kanban-card__avatars,
+.linear-issue-card__footer .kanban-card__avatars {
   margin-left: auto;
 }
-.github-issue-card__status {
+.github-issue-card__status,
+.linear-issue-card__status {
   margin-top: 7px;
   color: rgba(var(--tint-rgb), 0.58);
   font-size: 10px;
   line-height: 1.35;
 }
-.github-issue-avatar {
+.github-issue-avatar,
+.linear-issue-avatar {
   width: 18px;
   height: 18px;
   border-radius: 50%;
   object-fit: cover;
   border: 1px solid rgba(var(--tint-rgb), 0.16);
 }
-.github-issue-avatar--initial {
+.github-issue-avatar--initial,
+.linear-issue-avatar--initial {
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -9071,7 +9084,8 @@ button.group-node__setup:disabled {
   font-size: 9px;
   font-weight: 700;
 }
-.github-issue-move select {
+.github-issue-move select,
+.linear-issue-move select {
   max-width: 84px;
   height: 23px;
   border: 1px solid rgba(var(--tint-rgb), 0.12);
@@ -9094,7 +9108,8 @@ button.group-node__setup:disabled {
   border-color: var(--accent);
   color: var(--text-strong);
 }
-.github-issue-modal {
+.github-issue-modal,
+.linear-issue-modal {
   width: min(680px, calc(100vw - 32px));
   max-height: min(720px, calc(100vh - 48px));
   overflow: auto;
@@ -9103,7 +9118,8 @@ button.group-node__setup:disabled {
   background: var(--surface-raised);
   box-shadow: 0 24px 80px rgba(0, 0, 0, calc(0.65 * var(--shadow-k)));
 }
-.github-issue-modal__header {
+.github-issue-modal__header,
+.linear-issue-modal__header {
   display: flex;
   align-items: flex-start;
   justify-content: space-between;
@@ -9111,27 +9127,31 @@ button.group-node__setup:disabled {
   padding: 20px 22px 14px;
   border-bottom: 1px solid rgba(var(--tint-rgb), 0.08);
 }
-.github-issue-modal__header h2 {
+.github-issue-modal__header h2,
+.linear-issue-modal__header h2 {
   margin: 3px 0 0;
   color: var(--text-strong);
   font-size: 20px;
   line-height: 1.3;
 }
-.github-issue-modal__eyebrow {
+.github-issue-modal__eyebrow,
+.linear-issue-modal__eyebrow {
   color: rgba(var(--tint-rgb), 0.48);
   font-size: 11px;
   font-weight: 700;
   text-transform: uppercase;
   letter-spacing: 0.05em;
 }
-.github-issue-modal__close {
+.github-issue-modal__close,
+.linear-issue-modal__close {
   border: 0;
   background: transparent;
   color: rgba(var(--tint-rgb), 0.55);
   font-size: 24px;
   cursor: pointer;
 }
-.github-issue-modal__actions {
+.github-issue-modal__actions,
+.linear-issue-modal__actions {
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -9139,14 +9159,16 @@ button.group-node__setup:disabled {
   padding: 12px 22px;
   border-bottom: 1px solid rgba(var(--tint-rgb), 0.08);
 }
-.github-issue-modal__actions label {
+.github-issue-modal__actions label,
+.linear-issue-modal__actions label {
   display: flex;
   align-items: center;
   gap: 8px;
   color: rgba(var(--tint-rgb), 0.58);
   font-size: 12px;
 }
-.github-issue-modal__warning {
+.github-issue-modal__warning,
+.linear-issue-modal__warning {
   margin: 14px 22px 0;
   border: 1px solid color-mix(in srgb, var(--warn) 40%, transparent);
   border-radius: 8px;
@@ -9155,7 +9177,8 @@ button.group-node__setup:disabled {
   padding: 9px 11px;
   font-size: 12px;
 }
-.github-issue-modal__body {
+.github-issue-modal__body,
+.linear-issue-modal__body {
   padding: 22px;
   color: rgba(var(--tint-rgb), 0.78);
   white-space: pre-wrap;
@@ -12113,4 +12136,43 @@ body.focus-mode .dock:hover {
   margin: 8px 0 0;
   font-size: 12px;
   color: var(--danger);
+}
+
+/* Linear-only card chips. Linear reports a priority, an estimate and a workflow-state name that
+   GitHub has no analogue for; they render only where the provider actually supplies them. */
+.linear-issue-priority {
+  padding: 1px 5px;
+  border-radius: 4px;
+  border: 1px solid currentColor;
+  font-size: 9px;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+}
+.linear-issue-priority--1 { color: var(--danger, #ff453a); }
+.linear-issue-priority--2 { color: var(--warn); }
+.linear-issue-priority--3 { color: rgba(var(--tint-rgb), 0.62); }
+.linear-issue-priority--4 { color: rgba(var(--tint-rgb), 0.45); }
+.linear-issue-estimate {
+  min-width: 16px;
+  padding: 1px 4px;
+  border-radius: 4px;
+  background: rgba(var(--tint-rgb), 0.1);
+  color: rgba(var(--tint-rgb), 0.62);
+  font-variant-numeric: tabular-nums;
+  text-align: center;
+}
+.linear-issue-statename {
+  overflow: hidden;
+  max-width: 10ch;
+  color: rgba(var(--tint-rgb), 0.5);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.linear-issue-modal__meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  padding: 0 18px 10px;
+  color: rgba(var(--tint-rgb), 0.55);
+  font-size: 11px;
 }
