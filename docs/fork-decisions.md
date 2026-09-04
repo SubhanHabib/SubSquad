@@ -142,6 +142,29 @@ one-time Keychain prompt per app, and ad-hoc signatures differ on every rebuild,
 Worst case is re-entering the GitHub token and model-gateway key; managed Claude/Codex accounts are
 unaffected because the CLIs own those in their own config dirs.
 
+**3g. Updating the installed app — the routine.** Decisions 3a–3f say *why* the packaging is shaped
+this way but never state the loop itself, so it kept being reconstructed from them. It is:
+
+```bash
+git pull
+npm install                  # not optional — see below
+npm run dist:subsquad
+```
+
+then quit **both** SubSquad and nodeterm (3b: they share a data dir and a single-instance lock, so
+they cannot run at once), replace `/Applications/SubSquad.app` with the freshly built `.app` under
+`dist/`, and reopen.
+
+- **There is no in-app update, by design** (3e). Rebuild-and-replace is the only path.
+- **`npm install` after any upstream sync is mandatory.** Its `postinstall` is what patches node-pty
+  and runs `electron-rebuild` against Electron's ABI; skipping it leaves native modules built for
+  the previous ABI, and terminals fail to open. `npm run rebuild` is the repair.
+- **`resources/bin/tmux` must exist or electron-builder fails.** It is gitignored
+  (`.gitignore:16`) and mapped by `build.mac.extraResources` to `bin/tmux`, so it survives in an
+  existing working copy but **not a fresh clone** — 3c has where it came from and why it is copied
+  rather than compiled.
+- Expect the Keychain prompt above on each rebuild.
+
 ### 4. Linear issues on the Kanban board — 2026-08-23, *uncommitted*
 
 The feature the branch exists for. Decisions 1 and 2 were its groundwork; this is the provider
